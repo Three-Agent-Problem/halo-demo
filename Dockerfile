@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM golang:1.27-alpine AS build
 # Which Halo the demo plays: a tag, a commit, or "main".
-ARG HALO_VERSION=v0.1.0-beta.1.0.20261110130532-c9b77fe962c1
+ARG HALO_VERSION=v0.1.0-beta.1.0.20261110132546-9dbd7fc311d5
 ENV CGO_ENABLED=0 GOFLAGS=-trimpath GOWORK=off
 RUN go install github.com/three-agent-problem/halo/cmd/halo@${HALO_VERSION}
 WORKDIR /src

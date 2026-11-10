@@ -34,7 +34,7 @@ ssh -p 2222 localhost
 | `HALO_DEMO_HOST_KEY` | `.ssh/halo_demo_ed25519` (in the image: `/data/host_ed25519`) |
 | `HALO_DEMO_BIN` | `halo` |
 | `HALO_DEMO_MAX_SESSIONS` | `50` |
-| `HALO_VERSION` (build arg) | `v0.1.0-beta.1.0.20261110130532-c9b77fe962c1` (the commit with the mascot). Use any tag, commit, or `main`. |
+| `HALO_VERSION` (build arg) | `v0.1.0-beta.1.0.20261110132546-9dbd7fc311d5` (btw questions, the comms sizes and the mascot). Use any tag, commit, or `main`. |
 
 ## Deploying (Coolify or any VPS)
 SSH is not HTTP. A reverse proxy such as Traefik routes requests by domain using the Host header or TLS SNI, and SSH sends neither. So a domain can't route SSH to the container through the proxy; **the port has to be published on the host.**

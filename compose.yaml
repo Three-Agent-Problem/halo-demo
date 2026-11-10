@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        HALO_VERSION: ${HALO_VERSION:-v0.1.0-beta.1.0.20261110130532-c9b77fe962c1}
+        HALO_VERSION: ${HALO_VERSION:-v0.1.0-beta.1.0.20261110132546-9dbd7fc311d5}
     restart: unless-stopped
     # SSH is not HTTP, so a reverse proxy can't route it by domain: the port
     # has to be published on the host. Locally that's 2222; in production map
