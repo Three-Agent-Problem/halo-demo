@@ -1,0 +1,4 @@
+/halo-demo
+.ssh/
+go.work
+go.work.sum

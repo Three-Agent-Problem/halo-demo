@@ -1,0 +1,26 @@
+services:
+  halo-demo:
+    build:
+      context: .
+      args:
+        HALO_VERSION: ${HALO_VERSION:-v0.1.0-beta.1}
+    restart: unless-stopped
+    # SSH is not HTTP, so a reverse proxy can't route it by domain: the port
+    # has to be published on the host. Locally that's 2222; in production map
+    # host 22 here (see README, "Deploying").
+    ports:
+      - "${HALO_DEMO_PORT:-2222}:2222"
+    environment:
+      HALO_DEMO_MAX_SESSIONS: ${HALO_DEMO_MAX_SESSIONS:-50}
+    volumes:
+      - hostkey:/data   # keeps the host key, so the fingerprint survives redeploys
+    read_only: true
+    tmpfs:
+      - /tmp            # each session's throwaway HOME
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1g
+    pids_limit: 512
+
+volumes:
+  hostkey:
