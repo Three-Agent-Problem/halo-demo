@@ -43,7 +43,9 @@ SSH is not HTTP. A reverse proxy such as Traefik routes requests by domain using
 2. **Port:** a plain `ssh halo.3agents.dev` connects to port 22, and the server's own sshd usually holds that port.
    - Move the admin sshd to another port. For example, set `Port 2200` in `/etc/ssh/sshd_config`, open 2200 in the firewall, then restart sshd. Keep your current session open until you've checked that a new login works.
    - Then deploy with `HALO_DEMO_PORT=22`, which compose maps to the container's 2222.
-   - The other choice is to keep 2222 and tell people to run `ssh -p 2222 halo.3agents.dev`.
+   - Coolify also manages the server over SSH, so set the server's Port to 2200 in Coolify and validate it before you remove port 22 from sshd.
+   - The other choice is to keep 2222 and tell people to run `ssh -p 2222 halo.3agents.dev`. Avoid it: many office, school and home networks only let 22, 80, 443 and 8080 out, so 2222 (and 2200) silently time out for those visitors. If a port times out, test your own network first with `nc -vz portquiz.net 2222` (portquiz answers on every port).
+   - Anyone who connected to the domain or IP while port 22 was the old sshd gets a "REMOTE HOST IDENTIFICATION HAS CHANGED" warning once. `ssh-keygen -R halo.3agents.dev` fixes it. New visitors only see the usual first-time `yes` prompt.
 3. **Coolify:** deploy this repo as a Docker Compose resource. Leave its domain empty, because the proxy isn't involved. Set `HALO_DEMO_PORT` in the environment.
 4. **Host key:** the `hostkey` volume keeps the server's host key. Don't delete it. A new key makes every returning visitor's ssh warn them that the host identification has changed.
 
