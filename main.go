@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -37,7 +38,9 @@ func main() {
 	addr := env("HALO_DEMO_ADDR", ":2222")
 	hostKey := env("HALO_DEMO_HOST_KEY", ".ssh/halo_demo_ed25519")
 	bin := env("HALO_DEMO_BIN", "halo")
+	webAddr := env("HALO_DEMO_WEB_ADDR", ":8080")
 	maxSessions, _ := strconv.Atoi(env("HALO_DEMO_MAX_SESSIONS", "50"))
+	sl := &slots{max: int64(maxSessions)}
 
 	if _, err := exec.LookPath(bin); err != nil {
 		log.Fatal("halo binary not found", "bin", bin, "err", err)
@@ -56,7 +59,7 @@ func main() {
 		ssh.AllocatePty(),
 		wish.WithMiddleware(
 			demo(bin),
-			capacity(maxSessions),
+			capacity(sl),
 			ratelimiter.Middleware(ratelimiter.NewRateLimiter(rate.Every(2*time.Second), 5, 10_000)),
 			activeterm.Middleware(),
 			logging.Middleware(),
@@ -68,31 +71,77 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	log.Info("serving the Halo demo", "addr", addr, "max_sessions", maxSessions)
+	log.Info("serving the Halo demo", "addr", addr, "web", webAddr, "max_sessions", maxSessions)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, ssh.ErrServerClosed) {
 			log.Error("listen", "err", err)
 			stop()
 		}
 	}()
+	var web *http.Server
+	if webAddr != "off" {
+		web = &http.Server{Addr: webAddr, Handler: newWebServer(bin, sl).routes(), ReadHeaderTimeout: 10 * time.Second}
+		go func() {
+			if err := web.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Error("web listen", "err", err)
+				stop()
+			}
+		}()
+	}
 	<-ctx.Done()
 	shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdown)
+	if web != nil {
+		_ = web.Shutdown(shutdown)
+	}
+}
+
+// slots counts running demos across SSH and the web, so together they never
+// exceed the limit.
+type slots struct {
+	max int64
+	n   atomic.Int64
+}
+
+func (s *slots) take() bool {
+	if s.n.Add(1) > s.max {
+		s.n.Add(-1)
+		return false
+	}
+	return true
+}
+
+func (s *slots) give() { s.n.Add(-1) }
+
+// demoCmd is `halo --demo` in a throwaway home, with nothing from our own
+// environment.
+func demoCmd(ctx context.Context, bin, home, term string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, bin, "--demo")
+	cmd.Dir = home
+	cmd.Env = []string{
+		"PATH=/usr/local/bin:/usr/bin:/bin",
+		"HOME=" + home,
+		"XDG_CONFIG_HOME=" + home + "/.config",
+		"XDG_STATE_HOME=" + home + "/.local/state",
+		"TERM=" + term,
+		"COLORTERM=truecolor",
+		"LANG=C.UTF-8",
+	}
+	cmd.WaitDelay = 2 * time.Second
+	return cmd
 }
 
 // capacity turns visitors away once max sessions are running.
-func capacity(max int) wish.Middleware {
-	var n atomic.Int64
+func capacity(sl *slots) wish.Middleware {
 	return func(next ssh.Handler) ssh.Handler {
 		return func(s ssh.Session) {
-			if n.Add(1) > int64(max) {
-				n.Add(-1)
+			if !sl.take() {
 				wish.Println(s, "The Halo demo is full right now. Try again in a minute.")
 				_ = s.Exit(1)
 				return
 			}
-			defer n.Add(-1)
+			defer sl.give()
 			next(s)
 		}
 	}
@@ -119,18 +168,7 @@ func demo(bin string) wish.Middleware {
 			}
 			defer os.RemoveAll(home)
 
-			cmd := exec.CommandContext(s.Context(), bin, "--demo")
-			cmd.Dir = home
-			cmd.Env = []string{
-				"PATH=/usr/local/bin:/usr/bin:/bin",
-				"HOME=" + home,
-				"XDG_CONFIG_HOME=" + home + "/.config",
-				"XDG_STATE_HOME=" + home + "/.local/state",
-				"TERM=" + pty.Term,
-				"COLORTERM=truecolor",
-				"LANG=C.UTF-8",
-			}
-			cmd.WaitDelay = 2 * time.Second
+			cmd := demoCmd(s.Context(), bin, home, pty.Term)
 			if err := pty.Start(cmd, ssh.WithJobControl()); err != nil {
 				wish.Errorln(s, "could not start the demo")
 				log.Error("start", "err", err)

@@ -6,6 +6,8 @@ Try [Halo](https://github.com/three-agent-problem/halo) without installing it:
 ssh halo.3agents.dev
 ```
 
+Or open **https://halo.3agents.dev** to watch it in your browser.
+
 This is a small [Wish](https://github.com/charmbracelet/wish) SSH server. Every session gets its own `halo --demo` process, which plays a scripted run with no Lagrange server. Halo itself is unchanged: the image `go install`s a released Halo and runs the binary.
 
 ## How it works
@@ -17,10 +19,14 @@ This is a small [Wish](https://github.com/charmbracelet/wish) SSH server. Every 
   - At most 50 sessions run at once (`HALO_DEMO_MAX_SESSIONS`).
   - Connections are rate-limited per IP.
 
+## In the browser
+Browsers can't speak SSH, so the same binary also serves `docs/index.html` (xterm.js) on `:8080` and a WebSocket at `/ws`. Each WebSocket gets its own `halo --demo` on a PTY, just like an SSH session, and both share the session limit. Binary frames carry terminal bytes; a text frame is a resize, `{"cols":N,"rows":N}`. This part is plain HTTP, so it goes through Coolify's proxy like any web app.
+
 ## Run locally
 ```sh
 go run .                       # needs `halo` on PATH (or HALO_DEMO_BIN=/path/to/halo)
 ssh -p 2222 localhost
+open http://localhost:8080
 ```
 Or with Docker:
 ```sh
@@ -32,6 +38,7 @@ ssh -p 2222 localhost
 |---|---|
 | `HALO_DEMO_ADDR` | `:2222` |
 | `HALO_DEMO_HOST_KEY` | `.ssh/halo_demo_ed25519` (in the image: `/data/host_ed25519`) |
+| `HALO_DEMO_WEB_ADDR` | `:8080` (`off` disables the browser view) |
 | `HALO_DEMO_BIN` | `halo` |
 | `HALO_DEMO_MAX_SESSIONS` | `50` |
 | `HALO_VERSION` (build arg) | `v0.1.0-beta.1.0.20261110132546-9dbd7fc311d5` (btw questions, the comms sizes and the mascot). Use any tag, commit, or `main`. |
@@ -46,7 +53,7 @@ SSH is not HTTP. A reverse proxy such as Traefik routes requests by domain using
    - Coolify also manages the server over SSH, so set the server's Port to 2200 in Coolify and validate it before you remove port 22 from sshd.
    - The other choice is to keep 2222 and tell people to run `ssh -p 2222 halo.3agents.dev`. Avoid it: many office, school and home networks only let 22, 80, 443 and 8080 out, so 2222 (and 2200) silently time out for those visitors. If a port times out, test your own network first with `nc -vz portquiz.net 2222` (portquiz answers on every port).
    - Anyone who connected to the domain or IP while port 22 was the old sshd gets a "REMOTE HOST IDENTIFICATION HAS CHANGED" warning once. `ssh-keygen -R halo.3agents.dev` fixes it. New visitors only see the usual first-time `yes` prompt.
-3. **Coolify:** deploy this repo as a Docker Compose resource. Leave its domain empty, because the proxy isn't involved. Set `HALO_DEMO_PORT` in the environment.
+3. **Coolify:** deploy this repo as a Docker Compose resource. Set `HALO_DEMO_PORT` in the environment. For the browser view, set the service's domain to `https://halo.3agents.dev:8080` (`:8080` is the container port Traefik forwards to). SSH ignores the domain; it uses the published port.
 4. **Host key:** the `hostkey` volume keeps the server's host key. Don't delete it. A new key makes every returning visitor's ssh warn them that the host identification has changed.
 
 ## Hardening

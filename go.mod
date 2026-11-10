@@ -6,6 +6,8 @@ require (
 	charm.land/log/v2 v2.0.1
 	charm.land/ssh v0.4.3
 	charm.land/wish/v2 v2.0.5
+	github.com/coder/websocket v1.8.15
+	github.com/creack/pty v1.1.24
 	golang.org/x/crypto v0.57.0
 	golang.org/x/time v0.16.0
 )
@@ -25,7 +27,6 @@ require (
 	github.com/charmbracelet/x/xpty v0.1.4 // indirect
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/creack/pty v1.1.24 // indirect
 	github.com/go-logfmt/logfmt v0.6.1 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect

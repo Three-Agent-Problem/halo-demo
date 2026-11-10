@@ -10,6 +10,11 @@ services:
     # host 22 here (see README, "Deploying").
     ports:
       - "${HALO_DEMO_PORT:-2222}:2222"
+    # The browser view (docs/index.html + /ws) is plain HTTP, so it can go
+    # through the proxy: in Coolify set this service's domain to
+    # https://halo.3agents.dev:8080 (8080 = the container port).
+    expose:
+      - "8080"
     environment:
       HALO_DEMO_MAX_SESSIONS: ${HALO_DEMO_MAX_SESSIONS:-50}
     volumes:

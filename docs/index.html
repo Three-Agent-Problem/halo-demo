@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halo demo view</title>
+<meta name="description" content="A simulated Halo run, live in your browser: a team of Claude Code agents working together over A2A.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+<style>
+  :root {
+    --bg: #0e1115;
+    --panel: #14181e;
+    --line: #262c35;
+    --fg: #e6e9ee;
+    --dim: #8a93a2;
+    --accent: #f0455c;
+    --on-accent: #121418;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Schibsted Grotesk", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  header, footer {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    flex-wrap: wrap;
+  }
+  .mascot {
+    font-family: "DM Mono", ui-monospace, monospace;
+    line-height: 1;
+    font-size: 11px;
+    white-space: pre;
+    margin: 0;
+  }
+  .mascot .halo { color: var(--accent); display: inline-block; animation: bob 4.52s steps(1) infinite; }
+  @keyframes bob { 0%, 25%, 50%, 75% { transform: translateY(-2px); } 12.5%, 37.5%, 62.5%, 87.5% { transform: translateY(1px); } }
+  @media (prefers-reduced-motion: reduce) { .mascot .halo { animation: none; } }
+  h1 { font-size: 20px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  h1 span { color: var(--dim); font-weight: 400; }
+  .sub { color: var(--dim); font-size: 14px; margin: 2px 0 0; }
+  .sub code, footer code { font-family: "DM Mono", ui-monospace, monospace; color: var(--fg); }
+  main { flex: 1; display: flex; padding: 0 20px; min-height: 0; }
+  .frame {
+    flex: 1;
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px;
+    min-height: 420px;
+    overflow: hidden;
+  }
+  #term { position: absolute; inset: 10px; }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: var(--panel);
+    text-align: center;
+    padding: 20px;
+  }
+  .overlay[hidden] { display: none; }
+  .overlay p { color: var(--dim); margin: 0; max-width: 46ch; line-height: 1.5; }
+  button {
+    font: 600 15px "Schibsted Grotesk", system-ui, sans-serif;
+    background: var(--accent);
+    color: var(--on-accent);
+    border: 0;
+    border-radius: 8px;
+    padding: 11px 22px;
+    cursor: pointer;
+  }
+  button:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
+  footer { color: var(--dim); font-size: 13px; justify-content: space-between; }
+  footer a { color: var(--fg); }
+  @media (max-width: 640px) {
+    header, footer { padding: 12px 16px; }
+    main { padding: 0 16px; }
+    .frame { min-height: 60vh; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <pre class="mascot" aria-hidden="true"><span class="halo">(═══)</span>
+
+ ▄▄▄
+█▄█▄█
+▀▀▀▀▀</pre>
+  <div>
+    <h1>Halo <span>demo view</span></h1>
+    <p class="sub">A simulated team run: a Claude Code lead, workers and a reviewer talking over A2A. Same as <code>ssh halo.3agents.dev</code>.</p>
+  </div>
+</header>
+<main>
+  <div class="frame">
+    <div id="term"></div>
+    <div class="overlay" id="overlay">
+      <p id="status">Plays a scripted run in a real terminal. Nothing is installed and no agents run on your machine.</p>
+      <button id="start" type="button">Start the demo</button>
+    </div>
+  </div>
+</main>
+<footer>
+  <span>Get Halo: <code>brew install three-agent-problem/tap/halo</code></span>
+  <a href="https://github.com/three-agent-problem/halo">github.com/three-agent-problem/halo</a>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+<script>
+(function () {
+  // Served by halo-demo itself, the socket is on the same host. Anywhere else
+  // (GitHub Pages, a file), it is the public demo. ?ws=... overrides both.
+  var params = new URLSearchParams(location.search);
+  var sameHost = location.host === "halo.3agents.dev" || /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(location.host);
+  var wsURL = params.get("ws") ||
+    (sameHost ? (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws" : "wss://halo.3agents.dev/ws");
+
+  var overlay = document.getElementById("overlay");
+  var status = document.getElementById("status");
+  var button = document.getElementById("start");
+
+  var term = new Terminal({
+    fontFamily: '"DM Mono", ui-monospace, Menlo, monospace',
+    fontSize: 14,
+    cursorBlink: true,
+    allowProposedApi: true,
+    theme: { background: "#14181e", foreground: "#e6e9ee", cursor: "#f0455c", selectionBackground: "#3d5a80" }
+  });
+  var fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(document.getElementById("term"));
+
+  var ws = null;
+  var enc = new TextEncoder();
+
+  function sendSize() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ cols: term.cols, rows: term.rows }));
+    }
+  }
+
+  function refit() {
+    try { fit.fit(); } catch (e) {}
+    sendSize();
+  }
+  window.addEventListener("resize", refit);
+
+  function show(msg, label) {
+    status.textContent = msg;
+    button.textContent = label;
+    overlay.hidden = false;
+    button.focus();
+  }
+
+  function start() {
+    overlay.hidden = true;
+    term.reset();
+    refit();
+    term.focus();
+    var opened = false;
+    ws = new WebSocket(wsURL);
+    ws.binaryType = "arraybuffer";
+    ws.onopen = function () { opened = true; sendSize(); };
+    ws.onmessage = function (ev) {
+      term.write(typeof ev.data === "string" ? ev.data : new Uint8Array(ev.data));
+    };
+    ws.onclose = function () {
+      ws = null;
+      if (opened) {
+        setTimeout(function () { show("The demo has ended. Thanks for watching.", "Play again"); }, 2500);
+      } else {
+        show("Couldn't reach the demo server. Try again in a minute, or run ssh halo.3agents.dev.", "Try again");
+      }
+    };
+  }
+
+  term.onData(function (d) {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(enc.encode(d));
+  });
+  button.addEventListener("click", start);
+  document.fonts && document.fonts.ready.then(refit);
+})();
+</script>
+</body>
+</html>

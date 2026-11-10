@@ -8,6 +8,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY *.go ./
+COPY docs ./docs
 RUN go build -ldflags="-s -w" -o /out/halo-demo .
 
 FROM alpine:3.22
@@ -15,7 +16,7 @@ RUN adduser -D -u 10001 demo && mkdir /data && chown demo /data
 COPY --from=build /go/bin/halo /usr/local/bin/halo
 COPY --from=build /out/halo-demo /usr/local/bin/halo-demo
 USER demo
-ENV HALO_DEMO_ADDR=:2222 HALO_DEMO_HOST_KEY=/data/host_ed25519
+ENV HALO_DEMO_ADDR=:2222 HALO_DEMO_WEB_ADDR=:8080 HALO_DEMO_HOST_KEY=/data/host_ed25519
 VOLUME /data
-EXPOSE 2222
+EXPOSE 2222 8080
 ENTRYPOINT ["/usr/local/bin/halo-demo"]
