@@ -6,12 +6,12 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -146,8 +146,23 @@ func demo(bin string) wish.Middleware {
 			if host, _, e := net.SplitHostPort(s.RemoteAddr().String()); e == nil {
 				log.Debug("session done", "remote", host, "code", code)
 			}
-			wish.Println(s, fmt.Sprintf("\nThanks for trying Halo. Install it: %s", "https://github.com/three-agent-problem/halo"))
+			wish.Println(s, goodbye)
 			_ = s.Exit(code)
 		}
 	}
 }
+
+// goodbye is printed after the demo exits: the mascot (as in Halo's
+// internal/tui/mascot.go) beside where to get Halo.
+var goodbye = func() string {
+	halo, body := "\x1b[38;2;240;69;92m", "\x1b[38;2;230;233;238m"
+	dim, bold, reset := "\x1b[38;2;138;147;162m", "\x1b[1m", "\x1b[0m"
+	rows := []string{
+		halo + "(═══)" + reset,
+		"     ",
+		body + " ▄▄▄ " + reset + "   " + bold + "Thanks for trying Halo." + reset,
+		body + "█▄█▄█" + reset + "   " + dim + "brew install three-agent-problem/tap/halo" + reset,
+		body + "▀▀▀▀▀" + reset + "   " + dim + "https://github.com/three-agent-problem/halo" + reset,
+	}
+	return "\n" + strings.Join(rows, "\r\n") + "\r\n"
+}()
